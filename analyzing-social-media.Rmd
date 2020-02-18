@@ -3,9 +3,9 @@ title: "Analyzing Social Media Data"
 author: "Francesca Giannetti"
 date: "2/17/2020"
 output:
-  pdf_document: default
   html_document:
     df_print: paged
+  pdf_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -612,6 +612,9 @@ write_as_csv(bhm, "data/2020-02-17_black-history-month.csv", fileEncoding = "UTF
 bhm_take2 <- read_twitter_csv("data/2020-02-17_black-history-month.csv")
 ```
 
+## Feedback
+
+Finally, I'd appreciate it if you could fill out our brief feedback survey: <http://bit.ly/s20_dh_feedback>. Thanks for coming!
 
 ## Further Reading
 
