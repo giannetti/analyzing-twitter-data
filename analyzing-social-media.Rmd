@@ -1,11 +1,11 @@
 ---
 title: "Analyzing Social Media Data"
 author: "Francesca Giannetti"
-date: "2/17/2020"
+date: "10/13/2020"
 output:
+  pdf_document: default
   html_document:
     df_print: paged
-  pdf_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -13,20 +13,8 @@ output:
 if (!(require(knitr))) {
   install.packages("knitr")
 }
-if (!(require(rtweet))) {
-  install.packages("rtweet")
-}
-if (!(require(dplyr))) {
-  install.packages("dplyr")
-}
-if (!(require(ggplot2))) {
-  install.packages("ggplot2")
-}
-if (!(require(tidyr))) {
-  install.packages("tidyr")
-}
-if (!(require(stringr))) {
-  install.packages("stringr")
+if (!(require(tidyverse))) {
+  install.packages("tidyverse")
 }
 if (!(require(lubridate))) {
   install.packages("lubridate")
@@ -34,26 +22,19 @@ if (!(require(lubridate))) {
 if (!(require(tidytext))) {
   install.packages("tidytext")
 }
-if (!(require(scales))) {
-  install.packages("scales")
+if (!(require(broom))) {
+  install.packages("broom")
 }
-if (!(require(textdata))) {
-  install.packages("textdata")
-}
-if (!(require(ggridges))) {
-  install.packages("ggridges")
+if (!(require(rtweet))) {
+  install.packages("rtweet")
 }
 
-library(rtweet)
-library(dplyr)
-library(ggplot2)
-library(tidyr)
-library(stringr)
+library(knitr)
+library(tidyverse)
 library(lubridate)
 library(tidytext)
-library(scales)
-library(textdata)
-library(ggridges)
+library(broom)
+library(rtweet)
 
 knitr::opts_chunk$set(echo = TRUE)
 ```
@@ -117,89 +98,70 @@ sum(lp_prices)
 
 ## Memory management
 
-R reads data into your computer's memory in order to manipulate it. Given that the RAM on these lab computers is a finite thing, it makes sense to clean out your environment from time to time. 
+R reads data into your computer's memory in order to manipulate it. Given that the RAM on computers is a finite thing, it makes sense to clean out your environment from time to time. 
 
 ```{r eval=FALSE}
 
 rm(b) # remove the object `b`
 
-rm(list = ls()) # remove everything
+rm(list = ls()) # remove everything in your environment
 
 ```
 
 
-## Collecting Data Redux
+## Loading Data
 
-At last week's workshop on collecting Twitter data, we left off with the rtweet package. rtweet allows us to query Twitter's REST API using a variety of methods, including searching by strings (including account names and hashtags), user timelines, and latitude and longitude coordinates.
+In part 1 of this workshop on [collecting Twitter data](https://github.com/giannetti/collecting-twitter-data), we learned about TAGS and rtweet. TAGS supports queries by search strings (words, account names, and hashtags), and rtweet adds a few additional methods, including user timelines and latitude and longitude coordinates. 
 
-For help with the full rtweet package, type `help(package="rtweet")` at the console or visit the intro vignette at <https://rtweet.info/articles/intro.html>. 
+In today's workshop (part 2), we'll load two datasets gathered using each of these tools. The queries used the generate them are copied below for reference. If you want to allow your TAGS archive to continue updating over time so that you can periodically rerun your analyses in R, I show a method to do that below.[^fn1] Conversely, we will load the rtweet archive as a CSV file. 
 
-*Note*: the first time you run one of these fuctions, an authentication process will launch in a broswer window asking for you to connect your Twitter account to Kearney's Twitter Developer keys. 
+The resulting `covid_tweets` and `quarantine_tweets` objects in your environment are what are called data frames in R. A data frame is a compound data type composed of variables (column headers) and observations (rows). Data frames can hold variables of different kinds, such as character data (the text of tweets), quantitative data (retweet counts), and categorical information (en, es, fr). Clicking on those data frames will open a table view in RStudio allowing you to scan and filter columns and rows. 
 
 
-```{r eval=FALSE}
+```{r include=FALSE}
 
-## a combined hashtag and phrase search
-## don't run this because it'll take too long
-bhm_tweets <- search_tweets(
-  "#blackhistorymonth OR #bhm OR \"black history month\"", n = 18000, include_rts = TRUE, retryonratelimit = TRUE
-)
+# TAGS QUERY: #coviduni OR #covidcampus OR #covidcollege OR #PandemicU
 
-## search by lat-lon pair
-## you can look this up at https://www.latlong.net/
-alexander_tweets <- search_tweets(
-  geocode = "40.5045521,-74.4527554,5mi", include_rts = FALSE
-)
+# LOADING TAGS ARCHIVE AS GOOGLE SHEET
 
-## search the most recent 1,000 direct replies to @CuteEmergency
-cute_tweets <- search_tweets(
-  "to:CuteEmergency", 
-  n = 1000
-)
+google_sheet_csv <- 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQbT50tTQMjWdF1xf0-02rUUeKEWkYoHLP0fdcK478bpypxAuBvWoMbZS7DLU6RrxozHf9-1FC1UHPg/pub?gid=400689247&single=true&output=csv'
+covid_tweets <- read_csv(google_sheet_csv, col_types='ccccccccccccciicccii') # format columns as character and integer values
+covid_tweets <- covid_tweets[!duplicated(covid_tweets$id_str),] # remove duplicate rows based on id_str values
+covid_tweets$timestamp <- as.POSIXct(covid_tweets$time, format= "%d/%m/%Y %H:%M:%S", tz="GMT") # fix the date so R can understand it
+
+# RTWEET QUERY
+
+# quarantine_tweets <- search_tweets(
+#   "quarantine OR quarantena OR quarantaine",
+#   n = 1000000, include_rts = TRUE, retryonratelimit = TRUE,
+#   geocode = "40.4987461,-74.4484437,10mi" # old queens latlon
+# )
+
+# LOADING RTWEET ARCHIVE AS CSV
+
+quarantine_tweets <- read_twitter_csv("./data/nj_quarantine.csv") %>% 
+  mutate(created_at = as.POSIXct(created_at, format= "%Y-%m-%d %H:%M:%S", tz="GMT")) # again, fixing the date 
+
 ```
 
-## Load (more) data
-
-To give us a few more analysis options, let's also read in these prepared datasets as data frames. A data frame is a compound data type composed of variables (column headers) and observations (rows). Data frames can hold variables of different kinds, such as character data (the text of tweets), quantitative data (retweet counts), and categorical information (en, es, fr).
-
-```{r}
-## load twitter datasets
-bhm <- read_twitter_csv("data/2020-02-17_black-history-month.csv")
-bls <- read.delim("data/bls.tsv", sep = "\t", encoding = "UTF-8", quote = "", header = TRUE, stringsAsFactors = FALSE)
-pennsound <- read.delim("data/2020-02-17_pennsound.tsv", sep = "\t", encoding = "UTF-8", quote = "", header = TRUE, stringsAsFactors = FALSE)
-ubu <- read.delim("data/ubuweb.tsv", sep = "\t", encoding = "UTF-8", quote = "", header = TRUE, stringsAsFactors = FALSE)
-
-## remove duplicate tweets from the TAGS datasets
-bls_dedup <- subset(bls, !duplicated(bls$id_str))
-pennsound_dedup <- subset(pennsound, !duplicated(pennsound$id_str))
-ubu_dedup <- subset(ubu, !duplicated(ubu$id_str))
-```
 
 ## Review of Tweet object
 
-Let's spend some time looking at the JSON representation of a tweet, which you can access [here](https://developer.twitter.com/en/docs/tweets/data-dictionary/overview/intro-to-tweet-json). For reference, consult the [Tweet Data Dictionary](https://developer.twitter.com/en/docs/tweets/data-dictionary/overview/tweet-object) for definitions of the "root-level" field names. Having a familiarity with these fields will help you to develop your research questions. 
+For reference, I include links to Twitter Developer's ["Introduction to Tweet JSON"](https://developer.twitter.com/en/docs/twitter-api/v1/data-dictionary/overview/intro-to-tweet-json) and the ["Tweet Data Dictionary"](https://developer.twitter.com/en/docs/tweets/data-dictionary/overview/tweet-object) for the types and definitions of field names. Having a familiarity with these fields will help you to develop and refine your research questions. For the purposes of this workshop, I will draw your attention to specific fields. 
 
 ## Data summaries
 
-We can get an overview of our datasets with `str()`, which displays the structure of an object. Another helpful function to retrieve just the headers of your dataset: `names()`.
+One of the first things you may notice is that the archive collected with rtweet has many more columns than the TAGS archive. This is a product of the fact that rtweet simply collects more data from the Twitter REST API, but also because rtweet's `write_as_csv()` function, which I used to write my Twitter archives to file, flattens some of the JSON structure into additional columns.
+
+R has a handful of built-in functions that can provide us with additional information about our datasets. With `str()`, R displays the structure of an object, including data types (int, chr, date). Another helpful function to retrieve just the headers of your dataset: `names()`. Since we have so much character data, the `summary()` function is a little less helpful, but it does provide summary statistics for the numeric data.
 
 ```{r eval=FALSE}
 
-str(pennsound_dedup)
+str(covid_tweets) # structure, including data types
 
-names(pennsound_dedup)
+names(quarantine_tweets) # just the header names
 
-```
-
-R doesn't really intuit data types, as you may have noticed when you ran the `str()` function. You have to explicitly tell it the data type of your variable. In this case, we're going to use the values of the `time` column to create a brand new column called `timestamp` with a properly formated date and time that R will recognize. Note that we need to specify the time zone as well. 
-
-Notice how we specify a single variable from a data frame by using the dollar sign ($). 
-
-```{r}
-bhm$created_at <- as.POSIXct(bhm$created_at, format= "%Y-%m-%d %H:%M:%S", tz="GMT")
-bls_dedup$timestamp <- as.POSIXct(bls_dedup$time, format= "%d/%m/%Y %H:%M:%S", tz="GMT")
-pennsound_dedup$timestamp <- as.POSIXct(pennsound_dedup$time, format= "%d/%m/%Y %H:%M:%S", tz="GMT")
-ubu_dedup$timestamp <- as.POSIXct(ubu_dedup$time, format= "%d/%m/%Y %H:%M:%S", tz="GMT")
+summary(covid_tweets) # mean, median, 25th and 75th quartiles, min, max
 
 ```
 
@@ -209,13 +171,145 @@ An R data frame is a special case of a list, which is used to hold just about an
 
 ```{r eval=FALSE}
 
-bhm$text[1] # the first tweet
+covid_tweets$text[1] # the first tweet
 
-bhm$text[2:11] # tweets 2 through 11
+covid_tweets$text[2:11] # tweets 2 through 11
 
 ```
 
-## Select
+## Text Analysis Examples
+
+We'll do a bit of show-and-tell to see the sorts of text analysis that are possible with Twitter data before returning to exercises with dplyr and ggplot2, two very useful R libraries for manipulating and visualizing data. The following examples are inspired by code written by Julia Silge and David Robinson in [*Text Mining with R: A Tidy Approach*](https://www.tidytextmining.com/twitter.html) and by Kris Shaffer in ["Mining Twitter data with R, TidyText, and TAGS"](https://pushpullfork.com/mining-twitter-data-tidy-text-tags/).
+
+First, we create a regular expression (`remove_reg`) to remove some special characters like ampersands. Then we filter out retweets to analyze only the original tweets in this dataset. Next, we tokenize or split the tweets into words, and create a data frame that places each word in its own row together with the accompanying tweet metadata. Lastly, we'll run another filter to remove some common stop words like a, an, the, of, and numbers. 
+
+```{r}
+remove_reg <- "&amp;|&lt;|&gt;"
+tidy_quarantine_tweets <- quarantine_tweets %>%
+  filter(!str_detect(is_retweet, "^TRUE")) %>% 
+  mutate(text = str_remove_all(text, remove_reg)) %>%
+  unnest_tokens(word, text, token = "tweets") %>%
+  filter(!word %in% stop_words$word,
+         str_detect(word, "[a-z]"))
+
+```
+
+Next, we find the most common words in this Twitter archive. We'll pass another filter to remove the word "quarantine" since that was how this dataset was constructed to begin with and it won't be meaningful here. Next, we reorder the words by frequency and use ggplot2 to visualize them as a bar plot. 
+
+```{r word_freq}
+
+tidy_quarantine_tweets %>% 
+  count(word, sort=TRUE) %>% 
+  filter(n > 70, word != 'quarantine', word !='#quarantine') %>% 
+  mutate(word = reorder(word, n)) %>% 
+  ggplot(aes(x=word, y=n)) +
+  geom_bar(stat = 'identity') +
+  labs(x = NULL, y = paste('Word count (since ', min(tidy_quarantine_tweets$created_at), ')', sep = ""), title='Most common words in tweets containing quarantine') +
+  theme_light() +
+  coord_flip()
+```
+
+Now let's take a look to see if there are any changes in word use over time. Since the `quarantine_tweets` dataset spans several months, we are going to create a new time variable that aggregates tweets by the week in which they were posted. We use `floor_date()` from lubridate to do this. 
+
+After deciding to bin tweets by week, we count how many times a word gets used in each bin. We then use `filter()` to keep words that have been used a minimum number of times (50, in this case). 
+
+```{r words_by_time}
+
+words_by_time <- tidy_quarantine_tweets %>% 
+  filter(!str_detect(word, "quarantine")) %>% 
+  mutate(time_floor = floor_date(created_at, unit = "week")) %>% 
+  count(time_floor, word) %>% 
+  group_by(time_floor) %>% 
+  mutate(time_total = sum(n)) %>% 
+  group_by(word) %>% 
+  mutate(word_total = sum(n)) %>% 
+  ungroup() %>% 
+  rename(count = n) %>%
+  filter(word_total > 50)
+
+```
+
+Here, we're using `nest()` from tidyr to make a data frame with a list column that contains little miniature data frames for each word. 
+
+In the following line of code, we use `map()` from purrr to apply a modeling procedure to each of those little data frames inside our big data frame. Since this is count data, we will use `glm()` (generalized linear model) with `family="binomial"` for modeling. 
+
+The next step is to use `map()` and `tidy()` from the broom package to pull out the slopes for each of these models and find the important ones. We are comparing many slopes here and some of them are not statistically significant, so let’s apply an adjustment to the p-values for multiple comparisons.
+
+Finally, we find the top slopes by filtering for the words that have changed in frequency at a moderately significant level. We visualize our results using a smoothed line plot (`geom_smooth()`) showing frequency over time.
+
+```{r top_slopes, message=FALSE}
+nested_data <- words_by_time %>% nest(data = c(time_floor, count, time_total, word_total))
+
+nested_models <- nested_data %>% 
+  mutate(models = map(data, ~ glm(cbind(count, time_total) ~ time_floor, ., family = "binomial")))
+
+slopes <- nested_models %>% 
+  mutate(models = map(models, tidy)) %>% 
+  unnest(cols = c(models)) %>%
+  filter(term == "time_floor") %>% 
+  mutate(adjusted.p.value = p.adjust(p.value))
+
+top_slopes <- slopes %>% 
+  filter(adjusted.p.value < 0.05)
+
+words_by_time %>% 
+  inner_join(top_slopes, by = "word") %>%
+  filter(!str_detect(word, "nj|covid")) %>% # removing some less interesting slopes
+  ggplot(aes(x=time_floor, y= count/time_total, color = word)) +
+  geom_smooth(se = FALSE) +
+  labs(x = NULL, y = "word frequency") +
+  theme_bw()
+```
+
+Instead of word frequencies (unigrams), let's take a look at bigrams or two-word phrases to see if they show us anything more instructive about our dataset. We'll tokenize our tweets as before, and then use dplyr's `lead()` fuction to append the following word to each word, and then `unite()` the two into a bigram (but only if they both belong to the same tweet). 
+
+```{r tidy_quarantine_bigrams, message=FALSE}
+
+tidy_quarantine_bigrams <- quarantine_tweets %>%
+  filter(!str_detect(is_retweet, "^TRUE")) %>% 
+  mutate(text = str_remove_all(text, remove_reg)) %>%
+  unnest_tokens(word, text, token = "tweets") %>%
+  mutate(next_word = lead(word)) %>%
+  filter(!word %in% stop_words$word, # remove stop words
+         !next_word %in% stop_words$word, # remove stop words
+         substr(word, 1, 1) != '@', # remove user handles to protect privacy
+         substr(next_word, 1, 1) != '@', # remove user handles to protect privacy
+         substr(word, 1, 1) != '#', # remove hashtags
+         substr(next_word, 1, 1) != '#',
+         str_detect(word, "[a-z]"), # remove words containing ony numbers or symbols
+         str_detect(next_word, "[a-z]")) %>% # remove words containing ony numbers or symbols
+  filter(status_id == lead(status_id)) %>% # needed to ensure bigrams to cross from one tweet into the next
+  unite(bigram, word, next_word, sep = ' ') %>%
+  select(bigram, screen_name, created_at, status_id, followers_count, friends_count, location)
+
+p1 <- tidy_quarantine_bigrams %>%
+  count(bigram, sort=TRUE) %>%
+  filter(n >= 7) %>% 
+  mutate(bigram = reorder(bigram, n)) %>% 
+  ggplot(aes(x=bigram, y=n)) +
+  geom_bar(stat = 'identity') +
+  labs(x = '', y = paste('bigram count (since ', min(quarantine_tweets$created_at), ')', sep = ''), title = 'Most common bigrams in tweets containing "quarantine"') +
+  theme_minimal() +
+  coord_flip()
+
+p1
+
+```
+
+Since there's a lot going on with our bigrams as well, I'm going to show how one might subset for only those bigrams of interest to us. Cherry picking our data is perhaps not the best in terms of statistical significance, but permissable inasmuch as not all these bigrams will be equally interesting. First we will create a mini-object with a handful of the interesting bigrams. Then we will use the `subset()` fuction inside our ggplot2 call to plot only those bigrams that match our interesting bigrams mini-object. Here, we use a density plot (`geom_density()`) to estimate the underlying distribution.
+
+```{r bigram_density}
+
+bigrams <- c("post quarantine", "quarantine life", "mental health", "breaking quarantine")
+
+p2 <- ggplot(data = subset(tidy_quarantine_bigrams, subset = bigram %in% bigrams),
+            mapping = aes(x = created_at, fill = bigram, color = bigram))
+
+p2 + geom_density(alpha=0.4) + theme_minimal()
+```
+
+
+## Dplyr: Summary
 
 The next several functions we'll examine are data manipulation verbs that belong to the `dplyr` package. How about some basic descriptive statistics? We can select which columns we want by putting the name of the column in the `select()` function. Here we pick two columns. 
 
@@ -223,35 +317,35 @@ Dplyr imports the pipe operator ` %>% ` from the [magrittr](http://cran.r-projec
 
 `View` invokes a spreadsheet-style data viewer. Very handy for debugging your work!
 
-```{r}
+```{r eval=FALSE}
 
-bhm %>% 
-  select(screen_name, created_at) %>% View
+covid_tweets %>% 
+  select(from_user, created_at) %>% View
 
 ```
 
-## Arrange
+## Dplyr: Arrange
 
 We can sort them by number of followers with `arrange()`. We'll add the `desc()` function, since it's more likely we're interested in the users with the most followers. 
 
-What do you notice about the repeated `screen_name` values? 
+What do you notice about the repeated `from_user` values? 
 
 ```{r eval=FALSE}
 
-bhm %>% 
-  select(screen_name, followers_count) %>%
-  arrange(desc(followers_count)) %>% View
+covid_tweets %>% 
+  select(from_user, user_followers_count) %>%
+  arrange(desc(user_followers_count)) %>% View
 
 ```
 
-Question #1: How would you select the Twitter screen names and their number of friends, and arrange them in descending order of number of friends? What is the difference between a follower and a friend? Check back with the [User Data Dictionary](https://developer.twitter.com/en/docs/tweets/data-dictionary/overview/user-object) if necessary. 
+Question #1: Using the `covid_tweets` dataset, how would you select the Twitter usernames and their number of friends, and arrange them in descending order of number of friends? What is the difference between a follower and a friend? Check back with the [User Data Dictionary](https://developer.twitter.com/en/docs/tweets/data-dictionary/overview/user-object) if necessary. 
 
-```{r}
+```{r echo=FALSE}
 
 
 ```
 
-## Group by and summarize
+## Dplyr: Group by and summarize
 
 Notice that `arrange()` sorted our entire dataframe in ascending (or descending) order. What if we wanted to calculate the total number of tweets by user account name? 
 
@@ -259,116 +353,132 @@ We can solve this kind of problem with what Hadley Wickham calls the "split-appl
 
 Observe how this works. If we want to get a list of the top 10 tweeters, we can use the following code.
 
-```{r}
+```{r top_tweeters}
 
-bhm %>% 
-  select(screen_name) %>% 
-  group_by(screen_name) %>% 
+covid_tweets %>% 
+  select(from_user) %>% 
+  group_by(from_user) %>% 
   summarize(n=n()) %>%
   arrange(desc(n)) %>% 
   top_n(10, n) %>%
   kable() # print a nice table of the results
 ```
 
-One might reasonably assume that Black History Month is primarily an American celebration. Can we get a sense of how many of the users in this dataset are English speakers? How important are other user languages? 
+One might assume that most of the users in the `quarantine_tweets` dataset are English speakers, since these tweets were pulled from within a 10-mile radius of Old Queens. How important are other user languages? 
 
-Question #2: Can we use `select()`, `group_by()`, `summarize()`, and `arrange()` to figure out how many tweets there are by user language?
+Question #2: Using the `quarantine_tweets` dataset, can we use `select()`, `group_by()`, `summarize()`, and `arrange()` to figure out how many tweets there are by user language (HINT: you want the `user_lang` column)?
 
-```{r}
+```{r echo=FALSE}
 
 
 ```
 
-## Mutate
+The rtweet package does us the favor of extracting all the hashtags from the `entities` JSON object into its own column. Look for them in the `hashtags` column. 
 
-The `mutate()` function lets us create new columns out of existing columns. The `created_at` column indicates the time of the tweet down to the second in UTC or Greenwich Mean Time. This level of granularity might make the resulting visualization a bit messy. To make our plot more readable, we will count the total tweets posted in each hour and convert those hours into our time zone. Then we'll use `mutate()` to calculate the percentage of our total tweets that were posted in that hour. Finally, we'll use [ggplot2](http://ggplot2.org/) to plot the tweet percentages by the hour.
+Question #3: Using the `quarantine_tweets` dataset, can we use `select()`, `group_by()`, `summarize()`, and `arrange()` to create a table of hashtags and their frequencies?
 
-So what does that tweet volume over time look like? 
+```{r echo=FALSE}
 
-```{r bhm_plot}
 
-bhm %>% 
-  count(hour = hour(with_tz(created_at, "America/New_York"))) %>% 
-  mutate(percent = n / sum(n)) %>% 
-  ggplot(aes(hour, percent, color = hour)) +
+```
+
+
+## Dplyr: Mutate
+
+The `mutate()` function lets us create new columns out of existing columns. The `created_at` column indicates the time of the tweet down to the second in UTC or Greenwich Mean Time. Let's try to get a sense of when during the day most users are tweeting. We will count the total tweets posted in each hour and convert those hours into our time zone (Eastern). Then we'll use `mutate()` to calculate the percentage of our total tweets that were posted in that hour. Finally, we'll use [ggplot2](https://ggplot2.tidyverse.org/) to plot the tweet percentages by the hour.
+
+So what does that daily tweet pattern look like? 
+
+```{r covid_timeseries}
+
+covid_tweets %>% 
+  count(hour = hour(with_tz(timestamp, "America/New_York"))) %>% 
+  mutate(percent = n / sum(n)) %>%
+  ggplot(aes(x = hour, y = percent, color = hour)) +
   geom_line() +
-  scale_y_continuous(labels = percent_format()) +
   labs(x = "hour of day",
        y = "% of tweets",
        color = "")
 
+# save an image to file
+# ggsave(paste0("covid_timeseries.png"), width = 7.5, height = 5)
+
 ```
 
-But how many of those are retweets? Quoted tweets? Original tweets? Let's figure it out.
+Perhaps we could use mutate again to look at how many of those tweets are retweets vs. original tweets? Since `quarantine_tweets` provides us with a bit more information than `covid_tweets`, we will use that dataset.
 
-```{r bhm_summary}
-bhm_summary <- bhm %>% 
+```{r quarantine_summary}
+
+quarantine_summary <- quarantine_tweets %>% 
   select(created_at, is_retweet, is_quote, reply_to_screen_name) %>% 
-  mutate(hour = hour(with_tz(created_at, "America/New_York"))) %>% 
-  group_by(hour) %>% 
+  mutate(day = date(created_at)) %>% 
+  group_by(day) %>% 
   summarize(total = n(),
-            retweets = sum(is_retweet==TRUE),
-            quoted = sum(is_quote==TRUE),
+            retweets = sum(is_retweet == TRUE),
+            quoted = sum(is_quote == TRUE),
             reply = sum(!is.na(reply_to_screen_name)),
             original = total - retweets - quoted - reply)
 
-ggplot(bhm_summary, aes(x=hour)) + 
-  geom_line(aes(y=retweets), linetype="dashed", color="blue") +
-  geom_line(aes(y=original), linetype="twodash", color="#1b9e77") +
-  geom_line(aes(y=quoted), linetype="dotted", color="#d95f02") +
-  geom_line(aes(y=reply), linetype="dotdash", color="#66a61e") +
-  geom_line(aes(y=total), linetype="solid", color="black") +
+ggplot(quarantine_summary, aes(x=day)) + 
+  geom_line(aes(y=retweets), color="blue") +
+  geom_line(aes(y=original), color="#1b9e77") +
   theme_minimal() +
-  labs(x="", y="tweets", title="Black History Month Tweets, Feb 17, 2020", subtitle = "Total tweets (black), retweets (blue), original tweets (teal), quoted tweets (orange),\nreplies (lime green)")
+  labs(x="", y="tweets", title=paste("New Brunswick Quarantine Tweets as of ", max(quarantine_summary$day)), subtitle = "Retweets (blue), original tweets (teal)")
 
-# save an image to file
-ggsave(paste0("bhm-timeseries.png"), width = 7.5, height = 5)
 ```
 
-## Filter
+Question #4: Can we use `mutate()` to redo the plot above as percentages of retweets and original tweets (instead of counts) with respect to all tweets posted on a given day? Reuse the `quarantine_summary` object above to do so.
 
-To keep certain rows, and drop others, we pass the `filter()` function, which creates a vector of `TRUE` and `FALSE` values, one for each row. The most common way to do that is to use a comparison operator on a column of the data. In this case, we'll use the `is.na()` function, which itself returns a response of `TRUE` for the rows where the `in_reply_to_user_id_str` column is empty (and `FALSE` for where it's filled). But we'll preceed it with the `!` character, which means "is not equal to." In human language, what we're asking R to do is filter, or return, only those rows where `reply_to_user_id` is filled with a value, and drop the ones where it is empty. 
+```{r echo=FALSE}
+
+```
+
+
+## Dplyr: Filter
+
+To keep certain rows, and drop others, we pass the `filter()` function, which creates a vector of `TRUE` and `FALSE` values, one for each row. The most common way to do that is to use a comparison operator on a column of the data. In this case, we'll use the `is.na()` function, which itself returns a response of `TRUE` for the rows where the `in_reply_to_user_id_str` column is empty (and `FALSE` for where it's filled). But we'll preceed it with the `!` character, which means "is not equal to." In human language, what we're asking R to do is filter, or return, only those rows where `in_reply_to_user_id_str` is filled with a value, and drop the ones where it is empty. 
 
 The question we'll explore here: how many of those tweets are direct replies to some other user's tweet (meaning the text of the tweet begins with the `@` character)?
 
-```{r}
+```{r eval=FALSE}
 
-bhm %>% 
-  filter(!is.na(reply_to_user_id)) %>% 
-  select(reply_to_screen_name, created_at) %>% 
-  group_by(reply_to_screen_name) %>%
+covid_tweets %>% 
+  filter(!is.na(in_reply_to_user_id_str)) %>% 
+  select(in_reply_to_screen_name, timestamp) %>% 
+  group_by(in_reply_to_screen_name) %>%
   summarize(replies = n()) %>% 
   arrange(desc(replies)) %>% View
 
 ```
 
-Question #3: How can we modify the code above to return the text of the top 10 quoted tweets that have been the most favorited in the dataset. Hint: we'll need the `quoted_favorite_count` and `quoted_text` fields, and we'll use the `arrange()` and `top_n()` functions. What does this information tell us about our dataset? 
+Question #5: This time using the `quarantine_tweets` dataset, how can we modify the code above to return the text of the top 10 quoted tweets that have been the most favorited in the dataset. Hint: we'll need the `quoted_favorite_count` and `quoted_text` fields, and we'll use the `arrange()` and `top_n()` functions. What does this information tell us about our dataset? 
 
-```{r}
-
-
-```
-
-Question #4: How could we use the dplyr verbs we just learned to figure out which users have more followers than people they follow (a rough indicator of influence)? You might want to make use of some statistical summaries, like max().
-
-```{r}
+```{r echo=FALSE}
 
 
 ```
 
-## Plots 
+Question #6: How could we use the dplyr verbs we just learned to figure out which users have more followers than people they follow (in other words, the ratio, a rough indicator of influence)? You might want to make use of some statistical summaries, like `max()`.
 
-Let's get some practice with using `ggplot2`. Which users in the Black History Month dataset had the most favorited tweets?
+```{r echo=FALSE}
 
-```{r message=FALSE}
 
-faves <- bhm %>% 
+```
+
+## Ggplot2 
+
+Let's get some practice with using ggplot2. Which users in the New Brunswick `quarantine_tweets` dataset had the most favorited tweets?
+
+
+```{r faves, message=FALSE}
+
+faves <- quarantine_tweets %>% 
   group_by(screen_name) %>% 
-  summarize(tot_faves = sum(favorite_count, na.rm = TRUE)) %>% #drop NA values
-  arrange(desc(tot_faves)) %>% 
+  summarize(total_faves = sum(favorite_count, na.rm = TRUE)) %>% #drop NA values
+  arrange(desc(total_faves)) %>% 
   top_n(15) # just the top 15
 
-ggplot(faves, aes(x=reorder(screen_name, -tot_faves), y=tot_faves)) + # reorder bars by tot_faves values
+ggplot(faves, aes(x=reorder(screen_name, -total_faves), y=total_faves)) + # reorder bars by total_faves values
   geom_bar(stat = "identity") +
   coord_flip() + # flip x and y axes
   theme_minimal() +
@@ -376,255 +486,36 @@ ggplot(faves, aes(x=reorder(screen_name, -tot_faves), y=tot_faves)) + # reorder 
 
 ```
 
-Let's make a plot of the most retweeted users of the Black History Month dataset.
+Question #7: Let's make a plot of the most retweeted users of the New Brunswick `quarantine_tweets` dataset. (HINT: you'll need the `retweet_screen_name`, the `retweet_count`, and possibly also the `retweet_text` fields)
 
-```{r}
-
-```
-
-Let's turn now to the sound archive tweets. What does the British Library Sounds tweet volume look like compared to Ubuweb?
-
-```{r sound_tweets}
-
-# create subset for same time window in both datasets
-bls_sample <- bls_dedup %>% 
-  filter(timestamp > as.POSIXlt("2018-01-01 00:00:00", tz="GMT"),
-         timestamp < as.POSIXlt("2018-12-31 00:00:00", tz="GMT")) %>% 
-  select(text,timestamp,from_user)
-
-ubu_sample <- ubu_dedup %>% 
-  filter(timestamp > as.POSIXlt("2018-01-01 00:00:00", tz="GMT"),
-         timestamp < as.POSIXlt("2018-12-31 00:00:00", tz="GMT")) %>% 
-  select(text,timestamp,from_user)
-
-# bind them together and plot histogram
-sound_tweets <- bind_rows(bls_sample %>% 
-                      mutate(dataset = "bls"),
-                    ubu_sample %>% 
-                      mutate(dataset = "ubuweb"))
-
-ggplot(sound_tweets, aes(x = timestamp, fill = dataset)) +
-  geom_histogram(position = "identity", bins = 20, show.legend = FALSE) +
-  facet_wrap(~dataset, ncol = 1)
-```
-
-## Word frequencies
-
-What was everybody talking about? Here, we'll use the package [tidytext](http://dx.doi.org/10.21105/joss.00037) to process the text of the tweets. 
-
-In the plot below, the terms that hover close to the reference line are used with about equal frequency by both the British Library Sounds and the Ubuweb tweets. The further away the terms are from the reference line, the more characteristic they are of the individual sound archive. 
-
-```{r frequency, warning=FALSE, message=FALSE}
-
-# we use a regular expression to discard some common Twitter words from the analysis
-# we split words using non all non-word characters, e.g. spaces and punctuation
-replace_reg <- "https://t.co/[A-Za-z\\d]+|http://[A-Za-z\\d]+|&amp;|&lt;|&gt;|RT|https"
-unnest_reg <- "([^A-Za-z_\\d#@']|'(?![A-Za-z_\\d#@]))" 
-
-tidy_tweets <- sound_tweets %>% 
-  mutate(text = str_replace_all(text, replace_reg, "")) %>%
-  unnest_tokens(word, text, token = "regex", pattern = unnest_reg) %>%
-  filter(!word %in% stop_words$word,
-         str_detect(word, "[a-z]"))
-
-# calculate word frequencies for each dataset
-frequency <- tidy_tweets %>% 
-  group_by(dataset) %>% 
-  count(word, sort = TRUE) %>% 
-  left_join(tidy_tweets %>% 
-              group_by(dataset) %>% 
-              summarise(total = n())) %>% 
-  mutate(freq = n/total)
-
-frequency <- frequency %>% 
-  select(dataset, word, freq) %>% 
-  pivot_wider(names_from=dataset, values_from = freq) %>% #pivot_wider() from the tidyr package
-  arrange(bls, ubuweb)
-
-ggplot(frequency, aes(bls, ubuweb)) +
-  geom_jitter(alpha = 0.1, size = 2.5, width = 0.25, height = 0.25) +
-  geom_text(aes(label = word), check_overlap = TRUE, vjust = 1.5) +
-  scale_x_log10(labels = percent_format()) +
-  scale_y_log10(labels = percent_format()) +
-  geom_abline(color = "red")
+```{r echo=FALSE}
 
 ```
 
-## Distinctive word usage
+Question #8: What devices are most users tweeting from? Let's use the `source` column to plot a bar graph. Since there are more devices than you might guess, it might make sense to take only the top 10 or so.
 
-Now let's find which words are more or less likely to come from each sound archive's account using the log odds ratio. 
-
-```{r word_ratios, warning=FALSE}
-
-word_ratios <- tidy_tweets %>%
-  filter(!str_detect(word, "^@")) %>% # remove screen names
-  count(word, dataset) %>% 
-  filter(sum(n) >= 10) %>% 
-  ungroup() %>% 
-  pivot_wider(names_from=dataset, values_from=n, values_fill = list(n=0)) %>% 
-  mutate_if(is.numeric, list(~(. + 1) / (sum(.) + 1))) %>%
-  mutate(logratio = log(bls / ubuweb)) %>%
-  arrange(desc(logratio))
-
-word_ratios %>%
-  group_by(logratio < 0) %>%
-  top_n(12, abs(logratio)) %>%
-  ungroup() %>%
-  mutate(word = reorder(word, logratio)) %>% 
-  ggplot(aes(word, logratio, fill = logratio < 0)) +
-  geom_col() +
-  coord_flip() +
-  ylab("log odds ratio (BLS/Ubuweb)") +
-  scale_fill_discrete(name = "", labels = c("BLS", "Ubuweb"))
-
-```
-  
-What are some of the words that are equally as likely to come from both sound archives' tweets in 2018?
-
-```{r}
-
-word_ratios %>% 
-  arrange(abs(logratio))
-```
-
-## Word tokens
-
-Now we'll transform an existing table of tweets into a table with one row per word inside the tweet. We'll use the `unnest_tokens()` function from the [tidytext](https://cran.r-project.org/web/packages/tidytext/vignettes/tidytext.html) package to do so.
-
-```{r}
-
-tweet_words <- pennsound_dedup %>%
-  select(id_str,
-         from_user,
-         text,
-         timestamp) %>%
-  unnest_tokens(word, text)
-
-# let's look at the first few rows with the `head()` function
-head(tweet_words) 
+```{r echo=FALSE}
 
 ```
 
-## Stop words
+Lastly, let's try a different geom to look at tweet volume over time. 
 
-The `tidytext` package contains a `stop_words` table, which is a list of common words that are most commonly discarded before performing an analysis. We'll customize ours with a few words that are common to tweets.
+```{r quarantine_scatterplot}
 
-```{r top_words}
-
-# create a custom Twitter stopword list for the PennSound tweets
-my_stop_words <- tibble(
-  word = c(
-    "https",
-    "t.co",
-    "rt",
-    "amp",
-    "rstats",
-    "gt",
-    "pennsound"
-  ),
-  lexicon = "twitter"
-)
-
-all_stop_words <- stop_words %>%
-  bind_rows(my_stop_words)
-
-# we'll pass an additional filter to remove words that are numbers
-suppressWarnings({
-  no_numbers <- tweet_words %>%
-    filter(is.na(as.numeric(word))) 
-})
-
-no_stop_words <- no_numbers %>%
-  anti_join(all_stop_words, by = "word")
-
-# over half of the words were stop words!
-tibble(
-  total_words = nrow(tweet_words),
-  after_cleanup = nrow(no_stop_words)
-)
-
-# let's look at a table of our top words
-top_words <- no_stop_words %>%
-  group_by(word) %>%
-  tally %>%
-  arrange(desc(n)) %>%
-  head(10)
+quarantine_tweets  %>% 
+  select(created_at) %>% 
+  mutate(date = date(created_at)) %>% # bin tweet counts by date
+  group_by(date) %>% 
+  summarize(count = n()) %>% 
+  ggplot(aes(x=date, y=count)) + geom_point()
 
 ```
 
-## Sentiment matching
+Question #9: Can we create a comparable scatter plot for the `covid_tweets` dataset? Remeber to use the `timestamp` column in `covid_tweets`.
 
-The `get_sentiments()` functions in `tidytext` match words against different lexicons. We'll choose the NRC lexicon for this example. The `get_sentiments()` function returns a data frame. Sentiment analysis is often a bit crude. 
-
-With the NRC lexicon, one word may have multiple sentiments. For example, the word "sonnet" has joy, positive, and sadness classifications. This means multiple matches for words that have more than one sentiment classification. You may or may not find these classifications reasonable. For this and other reasons, it is imperative to inspect the results of any computational analysis.
-
-```{r}
-
-nrc_words <- no_stop_words %>%
-  inner_join(get_sentiments("nrc"), by = "word") 
-
-# inspect results
-nrc_words %>%
-  group_by(sentiment) %>%
-  tally %>%
-  arrange(desc(n)) %>% View
-
-# let's look at the words assigned to "disgust" what do we think?
-nrc_words %>%
-  filter(sentiment == "disgust") %>%
-  group_by(word) %>%
-  tally %>% View
+```{r echo=FALSE}
 
 ```
-
-## Visualize results
-
-We will use the `ggridges` package to visualize the results of our sentiment analysis as a ridgeline plot. Remember to type `help(package="ggridges")` at the console for the help pane.
-
-```{r nrc_plot, warning=FALSE, message=FALSE}
-
-ggplot(nrc_words) +
-    geom_density_ridges(aes(
-      x = timestamp,
-      y = sentiment, 
-      fill = sentiment),
-      rel_min_height = 0.01,
-      alpha = 0.7,
-      color = 'white',
-      scale = 3) +
-    theme_ridges() +
-    labs(title = "PennSound tweets sentiment analysis",
-         x = "Tweet Date",
-         y = NULL) + 
-  scale_fill_discrete(guide=FALSE)
-```
-
-
-## Save your data
-
-You may (and should) write any new and derived data you want to keep to file. It's very easy to read it back into R to continue your work later. 
-
-```{r eval=FALSE}
-#write to file
-write_as_csv(bhm, "data/2020-02-17_black-history-month.csv", fileEncoding = "UTF-8")
-
-# read back into R
-bhm_take2 <- read_twitter_csv("data/2020-02-17_black-history-month.csv")
-```
-
-## Feedback
-
-Finally, I'd appreciate it if you could fill out our brief feedback survey: <http://bit.ly/s20_dh_feedback>. Thanks for coming!
-
-## Further Reading
-
-Fitzgerald, J.D. "Sentiment analysis of (you guessed it!) Donald Trump's tweets." <https://www.storybench.org/sentiment-analysis-of-you-guessed-it-donald-trumps-tweets/>
-
-Rudis, R. "21 Recipes for Mining Twitter with rtweet." <https://rud.is/books/21-recipes/>
-
-Ruiz, E. "Sentiment analysis using tidytext." <https://www.edgarsdatalab.com/2017/09/04/sentiment-analysis-using-tidytext/>
-
-Silge, J. and Robinson, D. "Case study: comparing Twitter archives" *Text Mining with R*. (O'Reilly, 2017). <http://tidytextmining.com/twitter.html>.
 
 
 ## Answer key
@@ -634,16 +525,16 @@ These are potential solutions to the questions raised in this worksheet.
 ```{r eval=FALSE}
 # Q1: How would you select the Twitter screen names and their number of friends, and arrange them in descending order of friends? 
 
-bhm %>% 
-  select(screen_name, friends_count) %>% 
-  arrange(desc(friends_count)) %>% View
+covid_tweets %>% 
+  select(from_user, user_friends_count) %>% 
+  arrange(desc(user_friends_count)) %>% View
 
 ```
 
 ```{r eval=FALSE}
 # Q2: Can we use `select()`, `group_by()`, `summarize()`, and `arrange()` to figure out how many tweets there are by user language?
 
-bhm %>% 
+quarantine_tweets %>% 
   select(lang) %>% 
   group_by(tolower(lang)) %>% # `tolower()` converts to lowercase
   summarize(n = n()) %>%
@@ -652,28 +543,92 @@ bhm %>%
 ```
 
 ```{r eval=FALSE}
-# Q3: How can we modify the code above to return the text of the top 10 most favorited quoted tweets in the dataset? Hint: we'll need the `quoted_favorite_count` and `quoted_text` fields, and we'll use the `arrange()` and `top_n()` functions. What does this information tell us about our dataset? 
+# Q3: Using the `quarantine_tweets` dataset, an we use `select()`, `group_by()`, `summarize()`, and `arrange()` to create a table of hashtags and their frequencies?
 
-bhm %>% 
+quarantine_tweets %>% 
+  select(hashtags) %>% 
+  filter(hashtags != 'NA') %>% # remove NA vals
+  group_by(hashtags) %>% 
+  summarize(count = n()) %>% 
+  arrange(desc(count)) %>% 
+  top_n(15, count) %>% 
+  kable()
+
+```
+
+```{r eval=FALSE}
+# Q4: Can we use `mutate()` to redo the plot above as percentages of retweets and original tweets (instead of counts) with respect to all tweets posted on a given day? Reuse the `quarantine_summary` object above to do so.
+
+quarantine_summary %>% 
+  mutate(percent_retweet = round(retweets / total * 100, digits = 2), # use `round()` to truncate the decimal
+         percent_original = round(original / total * 100, digits = 2)) %>% View()
+```
+
+
+```{r eval=FALSE}
+# Q5: How can we modify the code above to return the text of the top 10 most favorited quoted tweets in the dataset? Hint: we'll need the `quoted_favorite_count` and `quoted_text` fields, and we'll use the `arrange()` and `top_n()` functions. What does this information tell us about our dataset? 
+
+quarantine_tweets %>% 
   filter(is_quote == TRUE) %>% 
   select(quoted_screen_name, quoted_text, quoted_favorite_count) %>% 
   arrange(desc(quoted_favorite_count)) %>% 
   top_n(10) %>% View
 
 ```
-```{r eval=FALSE}
-# Q4: How could we use the dplyr verbs we just learned to figure out which users have more followers than people they follow (a rough indicator of influence)? You might want to make use of some classical statistical summaries, like max().
 
-bhm %>% 
-  select(screen_name, followers_count, friends_count) %>% 
-  filter(followers_count > friends_count) %>% 
-  mutate(surplus = followers_count - friends_count) %>% 
-  group_by(screen_name) %>% 
-  summarize(max_followers = max(followers_count), 
-            max_friends = max(friends_count),
+```{r eval=FALSE}
+# Q6: How could we use the dplyr verbs we just learned to figure out which users have more followers than people they follow (a rough indicator of influence)? You might want to make use of some classical statistical summaries, like max().
+
+covid_tweets %>% 
+  select(from_user, user_followers_count, user_friends_count) %>% 
+  filter(user_followers_count > user_friends_count) %>% 
+  mutate(surplus = user_followers_count - user_friends_count) %>% 
+  group_by(from_user) %>% 
+  summarize(max_followers = max(user_followers_count), 
+            max_friends = max(user_friends_count),
             max_surplus = max(surplus)) %>% 
   arrange(desc(max_surplus)) %>% 
   top_n(25) %>%  # just taking the top 25 screen names
   kable()
 ```
 
+```{r eval=FALSE}
+# Q7: Let's make a plot of the most retweeted users of the New Brunswick `quarantine_tweets` dataset. (HINT: you'll need the `retweet_screen_name`, the `retweet_count`, and possibly also the `retweet_text` fields)
+
+quarantine_tweets %>% 
+  select(retweet_count, retweet_text, retweet_screen_name) %>% 
+  group_by(retweet_screen_name) %>%
+  filter(!is.na(retweet_text)) %>% # remove na vals 
+  summarize(total_retweets = sum(retweet_count)) %>% 
+  arrange(desc(total_retweets)) %>% 
+  top_n(10, total_retweets) %>% # lets just take the top 10
+  ggplot(aes(x=retweet_screen_name, y=total_retweets)) + geom_bar(stat="identity") + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) # rotate X axis labels a bit for readability
+```
+
+```{r eval=FALSE}
+# Q8: What devices are most users tweeting from? Let's use the `source` column to plot a bar graph. Since there are more devices than you might guess, it might make sense to take only the top 10 or so. 
+
+quarantine_tweets %>% 
+  select(source) %>% 
+  group_by(source) %>% 
+  summarize(total_by_source = n()) %>% 
+  top_n(10, total_by_source) %>% 
+  ggplot(aes(x=source, y=total_by_source)) + geom_bar(stat = "identity") +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) # rotating labels again
+
+```
+
+```{r eval=FALSE}
+# Q9: Can we create a comparable scatter plot for the `covid_tweets` dataset? Remeber to use the `timestamp` column in `covid_tweets`.
+
+covid_tweets %>% 
+  select(timestamp) %>% 
+  mutate(date = date(timestamp)) %>% 
+  group_by(date) %>% 
+  summarize(count = n()) %>% 
+  ggplot(aes(x=date, y=count)) + geom_point()
+
+```
+
+[^fn1]: I'm grateful to Kris Shaffer for showing me how to do this in <https://pushpullfork.com/mining-twitter-data-tidy-text-tags/>.
