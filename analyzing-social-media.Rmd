@@ -309,7 +309,7 @@ p2 + geom_density(alpha=0.4) + theme_minimal()
 ```
 
 
-## Dplyr: Summary
+## Dplyr: Select
 
 The next several functions we'll examine are data manipulation verbs that belong to the `dplyr` package. How about some basic descriptive statistics? We can select which columns we want by putting the name of the column in the `select()` function. Here we pick two columns. 
 
@@ -411,19 +411,19 @@ Perhaps we could use mutate again to look at how many of those tweets are retwee
 
 quarantine_summary <- quarantine_tweets %>% 
   select(created_at, is_retweet, is_quote, reply_to_screen_name) %>% 
-  mutate(day = date(created_at)) %>% 
-  group_by(day) %>% 
+  mutate(date = date(created_at)) %>% 
+  group_by(date) %>% 
   summarize(total = n(),
             retweets = sum(is_retweet == TRUE),
             quoted = sum(is_quote == TRUE),
             reply = sum(!is.na(reply_to_screen_name)),
             original = total - retweets - quoted - reply)
 
-ggplot(quarantine_summary, aes(x=day)) + 
+ggplot(quarantine_summary, aes(x=date)) + 
   geom_line(aes(y=retweets), color="blue") +
   geom_line(aes(y=original), color="#1b9e77") +
   theme_minimal() +
-  labs(x="", y="tweets", title=paste("New Brunswick Quarantine Tweets as of ", max(quarantine_summary$day)), subtitle = "Retweets (blue), original tweets (teal)")
+  labs(x="", y="tweets", title=paste("New Brunswick Quarantine Tweets as of ", max(quarantine_summary$date)), subtitle = "Retweets (blue), original tweets (teal)")
 
 ```
 
@@ -498,16 +498,17 @@ Question #8: What devices are most users tweeting from? Let's use the `source` c
 
 ```
 
-Lastly, let's try a different geom to look at tweet volume over time. 
+Lastly, let's try a different geom to reexamine tweet volume over time. Here, we reuse the quarantine_summary object created above, since we broke out some summary statistics about original, quoted, and retweeted tweets and replies. We can layer multiple points of different colors (shapes and sizes too). And we can also create annotations. Type `?geom_point()` or `annotate()` at the console for tips.
 
 ```{r quarantine_scatterplot}
 
-quarantine_tweets  %>% 
-  select(created_at) %>% 
-  mutate(date = date(created_at)) %>% # bin tweet counts by date
-  group_by(date) %>% 
-  summarize(count = n()) %>% 
-  ggplot(aes(x=date, y=count)) + geom_point()
+ggplot(quarantine_summary, aes(x = date)) + 
+  geom_point(color = "gray50", aes(y = original)) +
+  geom_point(color = "pink", aes(y = retweets)) +
+  theme_minimal() +
+  labs(title = "Quarantine Tweets from New Brunswick", subtitle = "Original tweets in gray, retweets in pink") +
+  annotate("text", x = as.Date("2020-06-03"), y = 213, label = "Russ Cirincione (D)\ntweet about billionaires", size = 3) +
+  annotate("segment", x = as.Date("2020-05-25"), xend = as.Date("2020-06-01"), y = 247, yend = 226, color = "gray60" )
 
 ```
 
